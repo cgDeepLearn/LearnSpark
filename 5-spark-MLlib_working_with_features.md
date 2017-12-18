@@ -37,7 +37,9 @@ CountVectorizer将文本文档转换为词条计数的向量。有关更多详�
 有关API的更多详细信息，请参阅[HashingTF Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.HashingTF)和[IDF Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.IDF)。
 ```python
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer
+from pyspark.sql import SparkSession
 
+spark = SparkSession.builder.appName("TF_IDfExample").getOrCreate()
 sentenceData = spark.createDataFrame([
     (0.0, "Hi I heard about Spark"),
     (0.0, "I wish Java could use case classes"),
@@ -56,11 +58,118 @@ idfModel = idf.fit(featurizedData)
 rescaledData = idfModel.transform(featurizedData)
 
 rescaledData.select("label", "features").show()
+spark.stop()
 ```
+
+|label|            features|
+|-----|--------------------|
+|  0.0|(20,[0,5,9,17],[0...|
+|  0.0|(20,[2,7,9,13,15]...|
+|  1.0|(20,[4,6,13,15,18...|
+
+
+
 Find full example code at "examples/src/main/python/ml/tf_idf_example.py" in the Spark repo.
 
 ### **Word2Vec**
+
+Word2Vec是一个Estimator,它选取表征文件的单词序列(句子)来训练一个Word2VecModel。模型将每个单词映射到一个唯一的固定大小的向量vector。Word2VecModel 用所有单词在文档中的平均值将每个文档转换为一个向量vector; 然后这个vector可以用作预测，文档相似度计算等功能。请参阅[Word2Vec MLlib用户指南](https://spark.apache.org/docs/latest/mllib-feature-extraction.html#word2vec)了解更多详细信息。
+
+**Examples**
+
+在下面的代码段中，我们从一组文档开始，每个文档都被表示为一个单词序列。对于每个文档，我们把它转换成一个特征向量。这个特征向量可以传递给一个学习算法。
+
+有关API的更多详细信息，请参阅[Word2Vec Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.Word2Vec)。
+```python
+from pyspark.ml.feature import Word2Vec
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("Word2VecExample").getOrCreate()
+# Input data: Each row is a bag of words from a sentence or document.
+documentDF = spark.createDataFrame([
+    ("Hi I heard about Spark".split(" "), ),
+    ("I wish Java could use case classes".split(" "), ),
+    ("Logistic regression models are neat".split(" "), )
+], ["text"])
+
+# Learn a mapping from words to Vectors.
+word2Vec = Word2Vec(vectorSize=3, minCount=0, inputCol="text", outputCol="result")
+model = word2Vec.fit(documentDF)
+
+result = model.transform(documentDF)
+for row in result.collect():
+    text, vector = row
+    print("Text: [%s] => \nVector: %s\n" % (", ".join(text), str(vector)))
+spark.stop()
+```
+Text: [Hi, I, heard, about, Spark] => 
+Vector: [0.0334007266909,0.00213784053922,-0.00239131785929]
+
+Text: [I, wish, Java, could, use, case, classes] => 
+Vector: [0.0464252099129,0.0357359477452,-0.000244158453175]
+
+Text: [Logistic, regression, models, are, neat] => 
+Vector: [-0.00983053222299,0.0668786892667,-0.0307074898912]
+
+---
+Find full example code at "examples/src/main/python/ml/word2vec_example.py" in the Spark repo.
+
 ### **CountVectorizer**
+
+CountVectorizer和CountVectorizerModel旨在帮助将文本文档集合转换为标记计数向量。当先验词典不可用时，CountVectorizer可以用作Estimator提取词汇表，并生成一个CountVectorizerModel。该模型生成词汇上的文档的稀疏表示，然后将其传递给其他算法（如LDA）。
+
+在拟合过程中，CountVectorizer将选择整个语料库中词频排在前面vocabSize个的词汇。一个可选参数minDF也会影响拟合过程，方法是指定词汇必须出现的文档的最小数量（或小于1.0）。另一个可选的二进制切换参数控制输出向量。如果设置为true，则所有非零计数都设置为1.这对于模拟二进制计数而不是整数计数的离散概率模型特别有用。
+
+**Examples**
+
+假设我们有列如下数据帧，有id和texts列：
+```python
+ id | texts
+----|----------
+ 0  | Array("a", "b", "c")
+ 1  | Array("a", "b", "b", "c", "a")
+```
+texts列中的每一行都是一个Array [String]类型的文档。调用CountVectorizer产生CountVectorizerModel与词汇（a，b，c）。然后转换后的输出列“向量”包含：
+```python
+ id | texts                           | vector
+----|---------------------------------|---------------
+ 0  | Array("a", "b", "c")            | (3,[0,1,2],[1.0,1.0,1.0])
+ 1  | Array("a", "b", "b", "c", "a")  | (3,[0,1,2],[2.0,2.0,1.0])
+```
+每个向量表示文档在词汇表上的标记计数。
+
+有关API的更多详细信息，请参阅[CountVectorizer Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.CountVectorizer) 和[CountVectorizerModel Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.CountVectorizerModel)。
+```python
+from pyspark.ml.feature import CountVectorizer
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("CountVectorizerExample").getOrCreate()
+# Input data: Each row is a bag of words with a ID.
+df = spark.createDataFrame([
+    (0, "a b c".split(" ")),
+    (1, "a b b c a".split(" "))
+], ["id", "words"])
+
+# fit a CountVectorizerModel from the corpus.
+cv = CountVectorizer(inputCol="words", outputCol="features", vocabSize=3, minDF=2.0)
+
+model = cv.fit(df)
+
+result = model.transform(df)
+result.show(truncate=False)
+spark.stop()
+```
+output:
+```python
++---+---------------+-------------------------+
+|id |words          |features                 |
++---+---------------+-------------------------+
+|0  |[a, b, c]      |(3,[0,1,2],[1.0,1.0,1.0])|
+|1  |[a, b, b, c, a]|(3,[0,1,2],[2.0,2.0,1.0])|
++---+---------------+-------------------------+
+```
+Find full example code at "examples/src/main/python/ml/count_vectorizer_example.py" in the Spark repo.
+
 
 ## **Feature Transformers**
 
