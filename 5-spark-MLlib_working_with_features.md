@@ -517,24 +517,418 @@ output:
 Find full example code at "examples/src/main/python/ml/string_indexer_example.py" in the Spark repo.
 
 ### **IndexToString**
-对称地StringIndexer，IndexToString将一列标签索引映射回包含作为字符串的原始标签的列。一个常见的用例是从标签生成索引StringIndexer，用这些索引对模型进行训练，并从预测索引列中检索原始标签IndexToString。但是，您可以自由提供自己的标签。
+对应于StringIndexer，IndexToString将一列标签索引映射回包含作为字符串的原始标签的列。一个常见的用例是从StringIndexer标签生成索引，用这些索引对模型进行训练，并从预测IndexToString索引列中检索原始标签。然而，你也可以提供自己的标签。
+
+**Examples**
+
+构造tringIndexer例子，假设我们有一个如下的数据帧，其有id和categoryIndex列：
+```python
+ id | categoryIndex
+----|---------------
+ 0  | 0.0
+ 1  | 2.0
+ 2  | 1.0
+ 3  | 0.0
+ 4  | 0.0
+ 5  | 1.0
+```
+将categoryIndex作为输入列，应用IndexToString， originalCategory作为输出列，我们能够检索我们的原始标签（他们将从列的元数据推断）：
+
+有关API的更多详细信息，请参阅[IndexToString Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.IndexToString)。
+```python
+from pyspark.ml.feature import IndexToString, StringIndexer
+from pyspark.sql import SparkSession  
+spark = SparkSession.builder.appName("IndexToStringExample").getOrCreate()
+
+df = spark.createDataFrame(
+    [(0, "a"), (1, "b"), (2, "c"), (3, "a"), (4, "a"), (5, "c")],
+    ["id", "category"])
+
+indexer = StringIndexer(inputCol="category", outputCol="categoryIndex")
+model = indexer.fit(df)
+indexed = model.transform(df)
+
+print("Transformed string column '%s' to indexed column '%s'"
+      % (indexer.getInputCol(), indexer.getOutputCol()))
+indexed.show()
+
+print("StringIndexer will store labels in output column metadata\n")
+
+converter = IndexToString(inputCol="categoryIndex", outputCol="originalCategory")
+converted = converter.transform(indexed)
+
+print("Transformed indexed column '%s' back to original string column '%s' using "
+      "labels in metadata" % (converter.getInputCol(), converter.getOutputCol()))
+converted.select("id", "categoryIndex", "originalCategory").show()
+spark.stop()
+```
+output:
+```
+Transformed string column 'category' to indexed column 'categoryIndex'
++---+--------+-------------+
+| id|category|categoryIndex|
++---+--------+-------------+
+|  0|       a|          0.0|
+|  1|       b|          2.0|
+|  2|       c|          1.0|
+|  3|       a|          0.0|
+|  4|       a|          0.0|
+|  5|       c|          1.0|
++---+--------+-------------+
+
+StringIndexer will store labels in output column metadata
+
+Transformed indexed column 'categoryIndex' back to original string column 'originalCategory' using labels in metadata
++---+-------------+----------------+
+| id|categoryIndex|originalCategory|
++---+-------------+----------------+
+|  0|          0.0|               a|
+|  1|          2.0|               b|
+|  2|          1.0|               c|
+|  3|          0.0|               a|
+|  4|          0.0|               a|
+|  5|          1.0|               c|
++---+-------------+----------------+
+```
+Find full example code at "examples/src/main/python/ml/index_to_string_example.py" in the Spark repo.
 
 ### **OneHotEncoding**
+[One-hot encoding](http://en.wikipedia.org/wiki/One-hot)将一列标签索引映射到一列二进制向量，其中最多只有一个one-value。该编码允许那些期望使用连续特征的算法（例如Logistic回归）使用分类特征。
+
+**Examples**
+
+关于 API的更多细节请参考[OneHotEncoder Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.OneHotEncoder)。
+```python
+from pyspark.ml.feature import OneHotEncoder, StringIndexer
+from pyspark.sql import SparkSession  
+spark = SparkSession.builder.appName("OneHotEncoderExample").getOrCreate()
+df = spark.createDataFrame([
+    (0, "a"),
+    (1, "b"),
+    (2, "c"),
+    (3, "a"),
+    (4, "a"),
+    (5, "c")
+], ["id", "category"])
+
+stringIndexer = StringIndexer(inputCol="category", outputCol="categoryIndex")
+model = stringIndexer.fit(df)
+indexed = model.transform(df)
+
+encoder = OneHotEncoder(inputCol="categoryIndex", outputCol="categoryVec")
+encoded = encoder.transform(indexed)
+encoded.show()
+spark.stop()
+```
+output:
+```python
++---+--------+-------------+-------------+
+| id|category|categoryIndex|  categoryVec|
++---+--------+-------------+-------------+
+|  0|       a|          0.0|(2,[0],[1.0])|
+|  1|       b|          2.0|    (2,[],[])|
+|  2|       c|          1.0|(2,[1],[1.0])|
+|  3|       a|          0.0|(2,[0],[1.0])|
+|  4|       a|          0.0|(2,[0],[1.0])|
+|  5|       c|          1.0|(2,[1],[1.0])|
++---+--------+-------------+-------------+
+```
+Find full example code at "examples/src/main/python/ml/onehot_encoder_example.py" in the Spark repo.
 
 ### **VectorIndexer**
+VectorIndexer有助于索引Vectors的数据集中的分类特征。它可以自动决定哪些特征是分类的，并将原始值转换为分类索引。具体来说，它做了以下几点：
 
+1. 取一个[Vector](https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.ml.linalg.Vector)类型的输入列和一个参数maxCategories。
+2. 根据不同值的数量确定哪些特征应该分类，这些特征最多被分为maxCategories类。
+3. 计算每个分类特征的分类索引(0-based)。
+4. 索引分类特征并将原始特征值转换为索引。
+
+索引分类特征允许Decision Trees(决策树)和Tree Ensembles等算法适当地处理分类特征，提高性能。
+
+**Examples**
+在下面的例子中，我们读入一个标记点​​的数据集，然后用VectorIndexer来决定哪些特征应该被视为分类特征。我们将分类特征值转换为它们的索引。这个转换的数据然后可以被传递给诸如DecisionTreeRegressor处理分类特征的算法。
+
+请参阅[VectorIndexer Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.VectorIndexer) 以获取有关API的更多详细信息。
+```python
+from pyspark.ml.feature import VectorIndexer
+from pyspark.sql import SparkSession  
+
+spark = SparkSession.builder.appName("VectorIndexerExample").getOrCreate()
+data = spark.read.format("libsvm").load("data/mllib/sample_libsvm_data.txt")
+
+indexer = VectorIndexer(inputCol="features", outputCol="indexed", maxCategories=10)
+indexerModel = indexer.fit(data)
+
+categoricalFeatures = indexerModel.categoryMaps
+print("Chose %d categorical features: %s" %
+      (len(categoricalFeatures), ", ".join(str(k) for k in categoricalFeatures.keys())))
+
+# Create new column "indexed" with categorical values transformed to indices
+indexedData = indexerModel.transform(data)
+indexedData.show()
+spark.stop()
+```
+output:
+```python
+Chose 351 categorical features: 645, 69, 365, 138, 101, 479, 333, 249, 0, 555, 666, 88, 170, 115, 276, 308, 5, 449, 120, 247, 614, 677, 202, 10, 56, 533, 142, 500, 340, 670, 174, 42, 417, 24, 37, 25, 257, 389, 52, 14, 504, 110, 587, 619, 196, 559, 638, 20, 421, 46, 93, 284, 228, 448, 57, 78, 29, 475, 164, 591, 646, 253, 106, 121, 84, 480, 147, 280, 61, 221, 396, 89, 133, 116, 1, 507, 312, 74, 307, 452, 6, 248, 60, 117, 678, 529, 85, 201, 220, 366, 534, 102, 334, 28, 38, 561, 392, 70, 424, 192, 21, 137, 165, 33, 92, 229, 252, 197, 361, 65, 97, 665, 583, 285, 224, 650, 615, 9, 53, 169, 593, 141, 610, 420, 109, 256, 225, 339, 77, 193, 669, 476, 642, 637, 590, 679, 96, 393, 647, 173, 13, 41, 503, 134, 73, 105, 2, 508, 311, 558, 674, 530, 586, 618, 166, 32, 34, 148, 45, 161, 279, 64, 689, 17, 149, 584, 562, 176, 423, 191, 22, 44, 59, 118, 281, 27, 641, 71, 391, 12, 445, 54, 313, 611, 144, 49, 335, 86, 672, 172, 113, 681, 219, 419, 81, 230, 362, 451, 76, 7, 39, 649, 98, 616, 477, 367, 535, 103, 140, 621, 91, 66, 251, 668, 198, 108, 278, 223, 394, 306, 135, 563, 226, 3, 505, 80, 167, 35, 473, 675, 589, 162, 531, 680, 255, 648, 112, 617, 194, 145, 48, 557, 690, 63, 640, 18, 282, 95, 310, 50, 67, 199, 673, 16, 585, 502, 338, 643, 31, 336, 613, 11, 72, 175, 446, 612, 143, 43, 250, 231, 450, 99, 363, 556, 87, 203, 671, 688, 104, 368, 588, 40, 304, 26, 258, 390, 55, 114, 171, 139, 418, 23, 8, 75, 119, 58, 667, 478, 536, 82, 620, 447, 36, 168, 146, 30, 51, 190, 19, 422, 564, 305, 107, 4, 136, 506, 79, 195, 474, 664, 532, 94, 283, 395, 332, 528, 644, 47, 15, 163, 200, 68, 62, 277, 691, 501, 90, 111, 254, 227, 337, 122, 83, 309, 560, 639, 676, 222, 592, 364, 100
++-----+--------------------+--------------------+
+|label|            features|             indexed|
++-----+--------------------+--------------------+
+|  0.0|(692,[127,128,129...|(692,[127,128,129...|
+|  1.0|(692,[158,159,160...|(692,[158,159,160...|
+|  1.0|(692,[124,125,126...|(692,[124,125,126...|
+|  1.0|(692,[152,153,154...|(692,[152,153,154...|
+|  1.0|(692,[151,152,153...|(692,[151,152,153...|
+|  0.0|(692,[129,130,131...|(692,[129,130,131...|
+|  1.0|(692,[158,159,160...|(692,[158,159,160...|
+|  1.0|(692,[99,100,101,...|(692,[99,100,101,...|
+|  0.0|(692,[154,155,156...|(692,[154,155,156...|
+|  0.0|(692,[127,128,129...|(692,[127,128,129...|
+|  1.0|(692,[154,155,156...|(692,[154,155,156...|
+|  0.0|(692,[153,154,155...|(692,[153,154,155...|
+|  0.0|(692,[151,152,153...|(692,[151,152,153...|
+|  1.0|(692,[129,130,131...|(692,[129,130,131...|
+|  0.0|(692,[154,155,156...|(692,[154,155,156...|
+|  1.0|(692,[150,151,152...|(692,[150,151,152...|
+|  0.0|(692,[124,125,126...|(692,[124,125,126...|
+|  0.0|(692,[152,153,154...|(692,[152,153,154...|
+|  1.0|(692,[97,98,99,12...|(692,[97,98,99,12...|
+|  1.0|(692,[124,125,126...|(692,[124,125,126...|
++-----+--------------------+--------------------+
+only showing top 20 rows
+```
+Find full example code at "examples/src/main/python/ml/vector_indexer_example.py" in the Spark repo.
 ### **Interaction**
+Interaction是一个Transformer,采用向量或双值列的方法生成一个单一的向量列，其中包含每个输入列的一个值的所有组合的乘积。
 
+例如，如果您有两个向量类型列，每个列都有三个维度作为输入列，那么您将获得一个9维向量作为输出列。
+
+**Examples**
+
+假设我们有以下DataFrame,有列“id1”，“vec1”和“vec2”：
+```python
+  id1|vec1          |vec2          
+  ---|--------------|--------------
+  1  |[1.0,2.0,3.0] |[8.0,4.0,5.0] 
+  2  |[4.0,3.0,8.0] |[7.0,9.0,8.0] 
+  3  |[6.0,1.0,9.0] |[2.0,3.0,6.0] 
+  4  |[10.0,8.0,6.0]|[9.0,4.0,5.0] 
+  5  |[9.0,2.0,7.0] |[10.0,7.0,3.0]
+  6  |[1.0,1.0,4.0] |[2.0,8.0,4.0]   
+```
+应用Interaction作用于这些输入列，然后interactedCol输出列包含：
+```python
+  id1|vec1          |vec2          |interactedCol                                         
+  ---|--------------|--------------|------------------------------------------------------
+  1  |[1.0,2.0,3.0] |[8.0,4.0,5.0] |[8.0,4.0,5.0,16.0,8.0,10.0,24.0,12.0,15.0]            
+  2  |[4.0,3.0,8.0] |[7.0,9.0,8.0] |[56.0,72.0,64.0,42.0,54.0,48.0,112.0,144.0,128.0]     
+  3  |[6.0,1.0,9.0] |[2.0,3.0,6.0] |[36.0,54.0,108.0,6.0,9.0,18.0,54.0,81.0,162.0]        
+  4  |[10.0,8.0,6.0]|[9.0,4.0,5.0] |[360.0,160.0,200.0,288.0,128.0,160.0,216.0,96.0,120.0]
+  5  |[9.0,2.0,7.0] |[10.0,7.0,3.0]|[450.0,315.0,135.0,100.0,70.0,30.0,350.0,245.0,105.0] 
+  6  |[1.0,1.0,4.0] |[2.0,8.0,4.0] |[12.0,48.0,24.0,12.0,48.0,24.0,48.0,192.0,96.0] 
+```
+注：该方法暂时并没有python的实现，有scala和Java的
 ### **Normalizer**
+Normalizer是一个Transformer，它转换数据集的Vector行，规范化每个Vector为unit norm。它采用参数p来规范化，它指定用于规范化的p范数。（默认p = 2 ）。这种规范化可以帮助标准化您的输入数据，并改善学习算法的行为。
 
+**Examples**
+
+以下示例演示如何以libsvm格式加载数据集，然后将每行标准化为unit L^1 norm1和unitL^∞ norm。
+
+有关API的更多详细信息，请参阅[Normalizer Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.Normalizer)。
+```python
+from pyspark.ml.feature import Normalizer
+from pyspark.ml.linalg import Vectors
+from pyspark.sql import SparkSession  
+
+spark = SparkSession.builder.appName("NormalizerExample").getOrCreate()
+dataFrame = spark.createDataFrame([
+    (0, Vectors.dense([1.0, 0.5, -1.0]),),
+    (1, Vectors.dense([2.0, 1.0, 1.0]),),
+    (2, Vectors.dense([4.0, 10.0, 2.0]),)
+], ["id", "features"])
+
+# Normalize each Vector using $L^1$ norm.
+normalizer = Normalizer(inputCol="features", outputCol="normFeatures", p=1.0)
+l1NormData = normalizer.transform(dataFrame)
+print("Normalized using L^1 norm")
+l1NormData.show()
+
+# Normalize each Vector using $L^\infty$ norm.
+lInfNormData = normalizer.transform(dataFrame, {normalizer.p: float("inf")})
+print("Normalized using L^inf norm")
+lInfNormData.show()
+spark.stop()
+```
+output:
+```
+Normalized using L^1 norm
++---+--------------+------------------+
+| id|      features|      normFeatures|
++---+--------------+------------------+
+|  0|[1.0,0.5,-1.0]|    [0.4,0.2,-0.4]|
+|  1| [2.0,1.0,1.0]|   [0.5,0.25,0.25]|
+|  2|[4.0,10.0,2.0]|[0.25,0.625,0.125]|
++---+--------------+------------------+
+
+Normalized using L^inf norm
++---+--------------+--------------+
+| id|      features|  normFeatures|
++---+--------------+--------------+
+|  0|[1.0,0.5,-1.0]|[1.0,0.5,-1.0]|
+|  1| [2.0,1.0,1.0]| [1.0,0.5,0.5]|
+|  2|[4.0,10.0,2.0]| [0.4,1.0,0.2]|
++---+--------------+--------------+
+```
+Find full example code at "examples/src/main/python/ml/normalizer_example.py" in the Spark repo.
 ### **StandardScaler**
+StandardScaler转换Vector行的数据集，将每个特征归一化为具有单位标准偏差和/或零均值。它需要参数：
+
+- withStd：默认为true。将数据缩放到单位标准偏差。
+- withMean：默认为False。在缩放之前将数据集中在平均值上。它会建立一个密集的输出，所以在应用于稀疏输入时要小心。
+
+StandardScaler是一个Estimator，可以fit在一个数据集上产生一个StandardScalerModel; 这相当于计算汇总统计。然后该模型可以转换Vector数据集中的列以具有单位标准偏差和/或零均值特征。
+
+请注意，如果某个要素的标准偏差为零，则会在该特征的Vector中返回默认值0.0。
+
+**Examples**
+
+以下示例演示如何加载数据集，然后将每个特征标准化为单位标准偏差。
+
+有关API的更多详细信息，请参阅[StandardScaler Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.StandardScaler)。
+```python
+from pyspark.ml.feature import StandardScaler
+from pyspark.sql import SparkSession  
+spark = SparkSession.builder.appName("StandardScalerExample").getOrCreate()
+dataFrame = spark.createDataFrame([
+    (0, Vectors.dense([1.0, 0.5, -1.0]),),
+    (1, Vectors.dense([2.0, 1.0, 1.0]),),
+    (2, Vectors.dense([4.0, 10.0, 2.0]),)
+], ["id", "features"])
+scaler = StandardScaler(inputCol="features", outputCol="scaledFeatures",
+                        withStd=True, withMean=False)
+
+# Compute summary statistics by fitting the StandardScaler
+scalerModel = scaler.fit(dataFrame)
+
+# Normalize each feature to have unit standard deviation.
+scaledData = scalerModel.transform(dataFrame)
+scaledData.show(truncate=False)
+spark.stop()
+```
+output:
+```
++---+--------------+------------------------------------------------------------+
+|id |features      |scaledFeatures                                              |
++---+--------------+------------------------------------------------------------+
+|0  |[1.0,0.5,-1.0]|[0.6546536707079772,0.09352195295828244,-0.6546536707079771]|
+|1  |[2.0,1.0,1.0] |[1.3093073414159544,0.1870439059165649,0.6546536707079771]  |
+|2  |[4.0,10.0,2.0]|[2.618614682831909,1.870439059165649,1.3093073414159542]    |
++---+--------------+------------------------------------------------------------+
+```
+Find full example code at "examples/src/main/python/ml/standard_scaler_example.py" in the Spark repo.
 
 ### **MinMaxScaler**
+MinMaxScaler转换Vector行数据集，将每个特征重新缩放到特定范围（通常为[0，1]）。它需要参数：
 
+min：默认为0.0。转换后的下界，被所有特征共享。
+max：默认为1.0。变换后的上界，被所有的特征共享。
+MinMaxScaler计算数据集的汇总统计并生成一个MinMaxScalerModel。然后模型可以单独转换每个特征，使其在给定的范围内。
+
+特征E的重新缩放的值被计算为，
+Rescaled(ei) = (ei − Emin) / (Emax − Emin) ∗ (max − min) + min 
+对于Emax==Emin的情况Rescaled(ei)=0.5∗(max+min)
+
+请注意，由于零值可能会被转换为非零值，所以transofromer的输出将会是DenseVector，即使输入是稀疏输入。
+
+**Examples**
+
+有关API的更多详细信息，请参阅[MinMaxScaler Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.MinMaxScaler) 和[MinMaxScalerModel Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.MinMaxScalerModel)。
+```python
+from pyspark.ml.feature import MinMaxScaler
+from pyspark.ml.linalg import Vectors
+from pyspark.sql import SparkSession  
+spark = SparkSession.builder.appName("MinMaxScalerExample").getOrCreate()
+dataFrame = spark.createDataFrame([
+    (0, Vectors.dense([1.0, 0.1, -1.0]),),
+    (1, Vectors.dense([2.0, 1.1, 1.0]),),
+    (2, Vectors.dense([3.0, 10.1, 3.0]),)
+], ["id", "features"])
+
+scaler = MinMaxScaler(inputCol="features", outputCol="scaledFeatures")
+
+# Compute summary statistics and generate MinMaxScalerModel
+scalerModel = scaler.fit(dataFrame)
+
+# rescale each feature to range [min, max].
+scaledData = scalerModel.transform(dataFrame)
+print("Features scaled to range: [%f, %f]" % (scaler.getMin(), scaler.getMax()))
+scaledData.select("features", "scaledFeatures").show()
+spark.stop()
+```
+output:
+```
+Features scaled to range: [0.000000, 1.000000]
++--------------+--------------+
+|      features|scaledFeatures|
++--------------+--------------+
+|[1.0,0.1,-1.0]| [0.0,0.0,0.0]|
+| [2.0,1.1,1.0]| [0.5,0.1,0.5]|
+|[3.0,10.1,3.0]| [1.0,1.0,1.0]|
++--------------+--------------+
+```
+Find full example code at "examples/src/main/python/ml/min_max_scaler_example.py" in the Spark repo.
 ### **MaxAbsScaler**
+MaxAbsScaler转换Vector行的数据集，通过分割每个特征的最大绝对值来重新缩放每个特征到范围[-1,1]。它不会移动/居中数据，因此不会破坏任何稀疏性。
 
+MaxAbsScaler计算数据集的汇总统计并生成一个MaxAbsScalerModel。该模型可以将每个特征分别转换为范围[-1,1]。
+
+**Examples**
+
+有关API的更多详细信息，请参阅[MaxAbsScaler Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.MaxAbsScaler) 和[MaxAbsScalerModel Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.MaxAbsScalerModel)。
+```python
+from pyspark.ml.feature import MaxAbsScaler
+from pyspark.ml.linalg import Vectors
+from pyspark.sql import SparkSession  
+
+spark = SparkSession.builder.appName("MaxAbsScalerExample").getOrCreate()
+dataFrame = spark.createDataFrame([
+    (0, Vectors.dense([1.0, 0.1, -8.0]),),
+    (1, Vectors.dense([2.0, 1.0, -4.0]),),
+    (2, Vectors.dense([4.0, 10.0, 8.0]),)
+], ["id", "features"])
+
+scaler = MaxAbsScaler(inputCol="features", outputCol="scaledFeatures")
+
+# Compute summary statistics and generate MaxAbsScalerModel
+scalerModel = scaler.fit(dataFrame)
+
+# rescale each feature to range [-1, 1].
+scaledData = scalerModel.transform(dataFrame)
+
+scaledData.select("features", "scaledFeatures").show()
+spark.stop()
+```
+output:
+```
++--------------+----------------+
+|      features|  scaledFeatures|
++--------------+----------------+
+|[1.0,0.1,-8.0]|[0.25,0.01,-1.0]|
+|[2.0,1.0,-4.0]|  [0.5,0.1,-0.5]|
+|[4.0,10.0,8.0]|   [1.0,1.0,1.0]|
++--------------+----------------+
+```
+Find full example code at "examples/src/main/python/ml/max_abs_scaler_example.py" in the Spark repo.
 ### **Bucketizer**
+Bucketizer将一列连续的特征转换成特征桶列，其中桶由用户指定。它需要一个参数：
 
+splits：用于将连续要素映射到存储桶的参数。有n + 1分裂，有n个桶。由分割x，y定义的存储区保存除了最后一个存储区（也包括y）之外的范围[x，y]中的值。分割应严格增加。必须明确提供-inf，inf的值以涵盖所有Double值; 否则，指定拆分之外的值将被视为错误。两个例子splits是Array(Double.NegativeInfinity, 0.0, 1.0, Double.PositiveInfinity)和Array(0.0, 1.0, 2.0)。
+请注意，如果您不知道目标列的上限和下限，则应该添加Double.NegativeInfinity并Double.PositiveInfinity作为分割的界限，以防止出现Bucketizer界限异常。
+
+还要注意，你提供的分割必须严格按照递增顺序，即s0 < s1 < s2 < ... < sn。
+
+更多细节可以在Bucketizer的API文档中找到。
 ### **ElementwiseProduct**
 
 ### **SQLTransformer**
