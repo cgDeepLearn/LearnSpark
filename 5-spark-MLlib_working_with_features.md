@@ -1164,7 +1164,7 @@ VectorSlicer接受一个具有指定索引的向量列，然后输出一个新�
 
 **Examples**
 
-有关API的更多详细信息，请参阅[RFormula Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.RFormula)。
+有关API的更多详细信息，请参阅[VectorSlicer Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.VectorSlicer)。
 ```python
 from pyspark.ml.feature import VectorSlicer
 from pyspark.ml.linalg import Vectors
@@ -1210,7 +1210,7 @@ RFormula产生特征的一个向量列的和一个double类型列或标签的字
 
 **Examples**
 
-有关API的更多详细信息，请参阅[RFormula Python文档](有关API的更多详细信息，请参阅RFormula Python文档。)。
+有关API的更多详细信息，请参阅[RFormula Python文档](https://spark.apache.org/docs/latest/api/python/pyspark.ml.html#pyspark.ml.feature.RFormula)。
 ```python
 from pyspark.ml.feature import RFormula
 from pyspark.sql import SparkSession
