@@ -51,13 +51,13 @@ MLlib表示这样一个工作流程Pipeline，它由一系列 PipelineStages（T
 A Pipeline是一个阶段序列，每个阶段是一个Transformer或一个Estimator。这些阶段是按顺序运行的，输入的DataFrame在每个阶段都经过转换。对于Transformer阶段，*transform()* 方法被调用作用于DataFrame上。对于Estimator阶段，*fit()*方法被调用，以产生Transformer（它成为PipelineModel或合适的Pipeline的一部分），以及Transformer的transform()方法也被调用作用于DataFrame。
 
 我们用简单的文本文档工作流来说明这一点。下图是a 。训练时间的使用情况Pipeline。
-![Pipeline](https://github.com/cgDeepLearn/LearnSpark/blob/master/ml-Pipeline.png?raw=true)
+![Pipeline](https://github.com/cgDeepLearn/LearnSpark/blob/master/pics/ml-Pipeline.png?raw=true
 
 在上面，最上面一行代表一个Pipeline有三个阶段。前两个（Tokenizer和HashingTF）是Transformers（蓝色），第三个（LogisticRegression）是Estimator（红色）。最下面一行代表流经管道的数据，其中圆柱表示DataFrames。这个Pipeline.fit()方法在原始DataFrame文档和标签上被调用。Tokenizer.transform()方法将原始文本文档分词，分词后的words作为一个新列添加到DataFrame中。HashingTF.transform()方法将单词列转换为特征向量，并向这些向量作为一个新列添加到DataFrame中。现在，既然LogisticRegression是一个Estimator，Pipeline首先调用LogisticRegression.fit()方法就生成一个LogisticRegressionModel。如果Pipeline有更多Estimators，它就会在DataFrame传送到下个阶段之前调用LogisticRegressionModel的transform() 方法。
 
 一个Pipeline是一个Estimator。因此，在Pipeline的fit()方法运行后，它产生一个PipelineModel，这是一个 Transformer。这PipelineModel是在测试时使用 ; 下图说明了这种用法。
 
-![PiplineModel](https://github.com/cgDeepLearn/LearnSpark/blob/master/ml-PipelineModel.png?raw=true)
+![PiplineModel](https://github.com/cgDeepLearn/LearnSpark/blob/master/pics/ml-PipelineModel.png?raw=true)
 
 在上面的图中，PipelineModel具有和原始的Pipeline相同数量的阶段，但所有EstimatorS在原始Pipeline中已变成TransformerS。当PipelineModel的transform()方法在测试数据集被调用，数据在管道上按序传递。每个阶段的transform()方法都会更新数据集并将其传递到下一个阶段。
 
