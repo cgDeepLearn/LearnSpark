@@ -6,7 +6,7 @@
 
 [rdd programming guide](docs/2-spark-rdd_programming_guide.md)
 
-[spark MLlib](docs/3-saprk-MLib_guide_Basic_statistics.md)
+[spark MLlib](docs/3-saprk-MLlib_guide_Basic_statistics.md)
 
 - [Pipelines](docs/4-spark-MLlib_Pipelines.md)
-- [working with features](docs/5-saprk-MLlib_working_with_features.md)
+- [working with features](docs/5-spark-MLlib_working_with_features.md)
