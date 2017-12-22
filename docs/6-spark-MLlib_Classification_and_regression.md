@@ -161,10 +161,47 @@ Find full example code at "examples/src/main/python/ml/logistic_regression_summa
 多分类通过多项逻辑（softmax）回归来支持。在多项逻辑回归中，算法产生K sets的系数集合(类似机器学习中的W)或维度K × J的矩阵其中K是结果分类数量和J是特征的数量。如果算法拟合时使用了偏置(类似机器学习中的b)，则偏置b也是一个K长度的向量。
 1. 多项逻辑回归的系数(coefficients)：coefficientMatrix，偏置(intercepts):interceptVector。
 2. coefficients和intercept在用多项逻辑回归训练模型中不适用。请使用coefficientMatrix，interceptVector
+
 结果的条件概率使用的是softmax function建模，我们使用多分类响应模型将加权负对数似然最小化，并使用elastic-net penalty来控制过拟合。
+
 ![Multinomial Logistic Regression](https://github.com/cgDeepLearn/LearnSpark/blob/master/pics/logisticregressionsoftmax.png?raw=true)
 关于推导的细节请查阅[这里](https://en.wikipedia.org/wiki/Multinomial_logistic_regression#As_a_log-linear_model).
-### Decision Tree Classifier
+
+下面的例子展示了如何训练具有弹性网络正则化的多类逻辑回归模型。
+```python
+from pyspark.ml.classification import LogisticRegression
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("MultinomialLogisticRegression").getOrCreate()
+# Load training data
+training = spark \
+    .read \
+    .format("libsvm") \
+    .load("data/mllib/sample_multiclass_classification_data.txt")
+
+lr = LogisticRegression(maxIter=10, regParam=0.3, elasticNetParam=0.8)
+
+# Fit the model
+lrModel = lr.fit(training)
+
+# Print the coefficients and intercept for multinomial logistic regression
+print("Coefficients: \n" + str(lrModel.coefficientMatrix))
+print("Intercept: " + str(lrModel.interceptVector))
+spark.stop()
+```
+output:
+```
+Coefficients: 
+3 X 4 CSRMatrix
+(0,3) 0.3176
+(1,2) -0.7804
+(1,3) -0.377
+Intercept: [0.0516523165983,-0.123912249909,0.0722599333102]
+
+```
+Find full example code at "examples/src/main/python/ml/multiclass_logistic_regression_with_elastic_net.py" in the Spark repo.
+
+## Decision Tree Classifier
 ### Random Forest Classifier
 ### Gradient-Boosted Tree Classifier
 ### Multilayer Perception Classifier
