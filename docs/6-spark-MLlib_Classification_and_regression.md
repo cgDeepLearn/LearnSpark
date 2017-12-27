@@ -202,9 +202,268 @@ Intercept: [0.0516523165983,-0.123912249909,0.0722599333102]
 Find full example code at "examples/src/main/python/ml/multiclass_logistic_regression_with_elastic_net.py" in the Spark repo.
 
 ## Decision Tree Classifier
+决策树是一种流行的分类和回归方法。关于spark.ml实现的更多信息可以在[决策树部分](https://spark.apache.org/docs/latest/ml-classification-regression.html#decision-trees)进一步找到。
+
+**Examples**
+
+以下示例以LibSVM格式加载数据集，将其分解为训练集和测试集，在训练数据集上训练，然后在保留的测试集上进行评估。我们使用两个特征变换器来准备数据; 这些帮助建立对标签和分类特征的索引，添加元数据到决策树算法可以识别的DataFrame上。
+```python
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import DecisionTreeClassifier
+from pyspark.ml.feature import StringIndexer, VectorIndexer
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("DecisionTreeExample").getOrCreate()
+# Load the data stored in LIBSVM format as a DataFrame.
+data = spark.read.format("libsvm").load("data/mllib/sample_libsvm_data.txt")
+
+# Index labels, adding metadata to the label column.
+# Fit on whole dataset to include all labels in index.
+labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
+# Automatically identify categorical features, and index them.
+# We specify maxCategories so features with > 4 distinct values are treated as continuous.
+featureIndexer =\
+    VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(data)
+
+# Split the data into training and test sets (30% held out for testing)
+(trainingData, testData) = data.randomSplit([0.7, 0.3])
+
+# Train a DecisionTree model.
+dt = DecisionTreeClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures")
+
+# Chain indexers and tree in a Pipeline
+pipeline = Pipeline(stages=[labelIndexer, featureIndexer, dt])
+
+# Train model.  This also runs the indexers.
+model = pipeline.fit(trainingData)
+
+# Make predictions.
+predictions = model.transform(testData)
+
+# Select example rows to display.
+predictions.select("prediction", "indexedLabel", "features").show(5)
+
+# Select (prediction, true label) and compute test error
+evaluator = MulticlassClassificationEvaluator(
+    labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+accuracy = evaluator.evaluate(predictions)
+print("Test Error = %g " % (1.0 - accuracy))
+
+treeModel = model.stages[2]
+# summary only
+print(treeModel)
+spark.stop()
+```
+output:
+```
++----------+------------+--------------------+
+|prediction|indexedLabel|            features|
++----------+------------+--------------------+
+|       1.0|         1.0|(692,[95,96,97,12...|
+|       1.0|         1.0|(692,[100,101,102...|
+|       1.0|         1.0|(692,[122,123,124...|
+|       1.0|         1.0|(692,[125,126,127...|
+|       1.0|         1.0|(692,[126,127,128...|
++----------+------------+--------------------+
+only showing top 5 rows
+
+Test Error = 0.0454545 
+DecisionTreeClassificationModel (uid=DecisionTreeClassifier_4b29a1e1d3b0e6e09baf) of depth 1 with 3 nodes
+```
+Find full example code at "examples/src/main/python/ml/decision_tree_classification_example.py" in the Spark repo.
+
 ### Random Forest Classifier
+随机森林是一种流行的分类和回归方法。关于spark.ml实现的更多信息可以在关于[随机森林的章节](https://spark.apache.org/docs/latest/ml-classification-regression.html#random-forests)中进一步找到。
+
+**Examples**
+
+以下示例以LibSVM格式加载数据集，将其分解为训练集和测试集，在训练数据集上训练，然后在测试集上进行评估。我们使用两个特征变换器来准备数据,这有助于帮助索引标签和分类特征的类别，添加元数据到DtaFrame(基于树的算法可以识别的)。
+```python
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import RandomForestClassifier
+from pyspark.ml.feature import IndexToString, StringIndexer, VectorIndexer
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName('RandomForestExample').getOrCreate()
+# Load and parse the data file, converting it to a DataFrame.
+data = spark.read.format("libsvm").load("data/mllib/sample_libsvm_data.txt")
+
+# Index labels, adding metadata to the label column.
+# Fit on whole dataset to include all labels in index.
+labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
+
+# Automatically identify categorical features, and index them.
+# Set maxCategories so features with > 4 distinct values are treated as continuous.
+featureIndexer =\
+    VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(data)
+
+# Split the data into training and test sets (30% held out for testing)
+(trainingData, testData) = data.randomSplit([0.7, 0.3])
+
+# Train a RandomForest model.
+rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=10)
+
+# Convert indexed labels back to original labels.
+labelConverter = IndexToString(inputCol="prediction", outputCol="predictedLabel",
+                               labels=labelIndexer.labels)
+
+# Chain indexers and forest in a Pipeline
+pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf, labelConverter])
+
+# Train model.  This also runs the indexers.
+model = pipeline.fit(trainingData)
+
+# Make predictions.
+predictions = model.transform(testData)
+
+# Select example rows to display.
+predictions.select("predictedLabel", "label", "features").show(5)
+
+# Select (prediction, true label) and compute test error
+evaluator = MulticlassClassificationEvaluator(
+    labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+accuracy = evaluator.evaluate(predictions)
+print("Test Error = %g" % (1.0 - accuracy))
+
+rfModel = model.stages[2]
+print(rfModel)  # summary only
+spark.stop()
+```
+output:
+```
++--------------+-----+--------------------+
+|predictedLabel|label|            features|
++--------------+-----+--------------------+
+|           0.0|  0.0|(692,[98,99,100,1...|
+|           1.0|  0.0|(692,[100,101,102...|
+|           0.0|  0.0|(692,[124,125,126...|
+|           0.0|  0.0|(692,[124,125,126...|
+|           0.0|  0.0|(692,[124,125,126...|
++--------------+-----+--------------------+
+only showing top 5 rows
+
+Test Error = 0.0416667
+RandomForestClassificationModel (uid=RandomForestClassifier_4e8ca5bee5432b4471d3) with 10 trees
+```
+Find full example code at "examples/src/main/python/ml/random_forest_classifier_example.py" in the Spark repo.
 ### Gradient-Boosted Tree Classifier
+Gradient-boosted trees (GBTs) 是一种流行的分类和回归方法，是一种决策树的集成算法。关于spark.ml实现的更多信息可以在[GBT](https://spark.apache.org/docs/latest/ml-classification-regression.html#gradient-boosted-trees-gbts)的一节中找到。
+
+**Examples**
+
+```python
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import GBTClassifier
+from pyspark.ml.feature import StringIndexer, VectorIndexer
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName('GBTExample').getOrCreate()
+# Load and parse the data file, converting it to a DataFrame.
+data = spark.read.format("libsvm").load("data/mllib/sample_libsvm_data.txt")
+
+# Index labels, adding metadata to the label column.
+# Fit on whole dataset to include all labels in index.
+labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
+# Automatically identify categorical features, and index them.
+# Set maxCategories so features with > 4 distinct values are treated as continuous.
+featureIndexer =\
+    VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(data)
+
+# Split the data into training and test sets (30% held out for testing)
+(trainingData, testData) = data.randomSplit([0.7, 0.3])
+
+# Train a GBT model.
+gbt = GBTClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", maxIter=10)
+
+# Chain indexers and GBT in a Pipeline
+pipeline = Pipeline(stages=[labelIndexer, featureIndexer, gbt])
+
+# Train model.  This also runs the indexers.
+model = pipeline.fit(trainingData)
+
+# Make predictions.
+predictions = model.transform(testData)
+
+# Select example rows to display.
+predictions.select("prediction", "indexedLabel", "features").show(5)
+
+# Select (prediction, true label) and compute test error
+evaluator = MulticlassClassificationEvaluator(
+    labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+accuracy = evaluator.evaluate(predictions)
+print("Test Error = %g" % (1.0 - accuracy))
+
+gbtModel = model.stages[2]
+print(gbtModel)  # summary only
+spark.stop()
+```
+output:
+```
++----------+------------+--------------------+
+|prediction|indexedLabel|            features|
++----------+------------+--------------------+
+|       1.0|         1.0|(692,[98,99,100,1...|
+|       1.0|         1.0|(692,[100,101,102...|
+|       1.0|         1.0|(692,[124,125,126...|
+|       1.0|         1.0|(692,[124,125,126...|
+|       1.0|         1.0|(692,[124,125,126...|
++----------+------------+--------------------+
+only showing top 5 rows
+
+Test Error = 0.030303
+GBTClassificationModel (uid=GBTClassifier_439db0c5094b1786e321) with 10 trees
+```
+Find full example code at "examples/src/main/python/ml/gradient_boosted_tree_classifier_example.py" in the Spark repo
+
 ### Multilayer Perception Classifier
+多层感知器分类器（MLPC）是基于[前馈人工神经网络](https://en.wikipedia.org/wiki/Feedforward_neural_network)的分类器。MLPC由多层节点组成。每层完全连接到网络中的下一层。输入层中的节点表示输入数据。所有其他节点通过输入与节点权重**w** 和偏差**b**的线性组合并应用激活函数将输入映射到输出。**K + 1**层的MPLC可写成如下的矩阵形式：
+![MLPC](https://github.com/cgDeepLearn/LearnSpark/blob/master/pics/MLPC.png?raw=true)
+
+ 中间层节点使用sigmoid（logistic）函数：f(zi) = 1/(1 + e^-zi)\
+  输出层中的节点使用softmax函数：f(zi) = e^zi/(∑e^zi) \
+ 输出层中N代表类别数目\
+ 多层感知机通过方向向传播来学习模型，我们使用逻辑损失函数优化,L-BFGS作为优化程序
+ ```python
+from pyspark.ml.classification import MultilayerPerceptronClassifier
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName('MLPCExample').getOrCreate()
+# Load training dat
+data = spark.read.format("libsvm")\
+    .load("data/mllib/sample_multiclass_classification_data.txt")
+
+# Split the data into train and test
+splits = data.randomSplit([0.6, 0.4], 1234)
+train = splits[0]
+test = splits[1]
+
+# specify layers for the neural network:
+# input layer of size 4 (features), two intermediate of size 5 and 4
+# and output of size 3 (classes)
+layers = [4, 5, 4, 3]
+
+# create the trainer and set its parameters
+trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234)
+
+# train the model
+model = trainer.fit(train)
+
+# compute accuracy on the test set
+result = model.transform(test)
+predictionAndLabels = result.select("prediction", "label")
+evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
+print("Test set accuracy = " + str(evaluator.evaluate(predictionAndLabels)))
+spark.stop()
+ ```
+ output:
+ ```
+ Test set accuracy = 0.8627450980392157
+ ```
+ Find full example code at "examples/src/main/python/ml/multilayer_perceptron_classification.py" in the Spark repo.
 ### Linear Support Vector Machine
 ### One-vs-Rest Classifier(a.k.a One-vs-All)
 ### Naive Bayes
