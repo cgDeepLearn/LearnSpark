@@ -465,8 +465,143 @@ spark.stop()
  ```
  Find full example code at "examples/src/main/python/ml/multilayer_perceptron_classification.py" in the Spark repo.
 ### Linear Support Vector Machine
-### One-vs-Rest Classifier(a.k.a One-vs-All)
+一个[支持向量机](https://en.wikipedia.org/wiki/Support_vector_machine)在高或无限维空间构建一个或一簇超平面，该空间可用于分类，回归或其他任务。直觉上，通过寻找距离任何类别的最近的训练数据点（所谓的functional margin）最大距离的超平面来实现良好的分离，因为一般而言，margin越大，分类器的泛化误差越低。Spark ML中的LinearSVC支持线性SVM的二元分类。在内部，它使用OWLQN优化器来优化[hinge loss](https://en.wikipedia.org/wiki/Hinge_loss)。
+```python
+from pyspark.ml.classification import LinearSVC
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("linearSVCExample").getOrCreate()
+# Load training data
+training = spark.read.format("libsvm").load("data/mllib/sample_libsvm_data.txt")
+
+lsvc = LinearSVC(maxIter=10, regParam=0.1)
+
+# Fit the model
+lsvcModel = lsvc.fit(training)
+
+# Print the coefficients and intercept for linearsSVC
+print("Coefficients: " + str(lsvcModel.coefficients))
+print("Intercept: " + str(lsvcModel.intercept))
+spark.stop()
+```
+output:
+```
+Coefficients:
+[0.0,0.0,......,-5.83656045253e-05,-0.000123781942165,-0.000117507049533,-6.19711523061e-05,-5.04200964581e-05,-0.000140552602236,-0.000141033094247,-0.000192723082389,-0.000480248996468]
+Intercept: 0.012911305214513969
+```
+Find full example code at "examples/src/main/python/ml/linearsvc.py" in the Spark repo.
+### One-vs-Rest Classifier(又叫 One-vs-All)
+[OneVsRest](http://en.wikipedia.org/wiki/Multiclass_classification#One-vs.-rest)是一个将一个给定的二分类算法有效地扩展到多分类问题应用中的算法，也叫做“One-vs-All”算法。
+
+OneVsRest是一个被实现为Estimator。它采用一个基础的Classifier然后对于k个类别分别创建二分类问题。类别i的二分类分类器用来预测类别为i还是不为i，即将i类和其他类别区分开来。最后，通过依次对k个二分类分类器进行评估，取置信最高的分类器的标签作为i类别的标签。
+
+**Examples**
+
+下面的示例演示了如何加载[Iris数据集](http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multiclass/iris.scale)，将其解析为DataFrame并使用其执行多类别分类OneVsRest。计算测试误差以测量算法精度。
+```python
+from pyspark.ml.classification import LogisticRegression, OneVsRest
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("oneVsRestExample").getOrCreate()
+# load data file.
+inputData = spark.read.format("libsvm") \
+    .load("data/mllib/sample_multiclass_classification_data.txt")
+
+# generate the train/test split.
+(train, test) = inputData.randomSplit([0.8, 0.2])
+
+# instantiate the base classifier.
+lr = LogisticRegression(maxIter=10, tol=1E-6, fitIntercept=True)
+
+# instantiate the One Vs Rest Classifier.
+ovr = OneVsRest(classifier=lr)
+
+# train the multiclass model.
+ovrModel = ovr.fit(train)
+
+# score the model on test data.
+predictions = ovrModel.transform(test)
+
+# obtain evaluator.
+evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
+
+# compute the classification error on test data.
+accuracy = evaluator.evaluate(predictions)
+print("Test Error = %g" % (1.0 - accuracy))
+spark.stop()
+```
+output:
+```
+Test Error = 0.0625
+```
+Find full example code at "examples/src/main/python/ml/one_vs_rest_example.py" in the Spark repo.
 ### Naive Bayes
+[朴素贝叶斯分类器](http://en.wikipedia.org/wiki/Naive_Bayes_classifier)是一个简单的基于贝叶斯定理与特征条件独立假设的概率分类器。spark.ml目前的实现支持[多项式朴素贝叶斯](http://nlp.stanford.edu/IR-book/html/htmledition/naive-bayes-text-classification-1.html)和[伯努利朴素贝叶斯](http://nlp.stanford.edu/IR-book/html/htmledition/the-bernoulli-model-1.html)。更多的信息可以在MLlib的[Naive Bayes](https://spark.apache.org/docs/latest/mllib-naive-bayes.html#naive-bayes-sparkmllib)一节中找到。
+```python
+from pyspark.ml.classification import NaiveBayes
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("NaiveBayesExample").getOrCreate()
+# Load training data
+data = spark.read.format("libsvm") \
+    .load("data/mllib/sample_libsvm_data.txt")
+
+# Split the data into train and test
+splits = data.randomSplit([0.6, 0.4], 1234)
+train = splits[0]
+test = splits[1]
+
+# create the trainer and set its parameters
+nb = NaiveBayes(smoothing=1.0, modelType="multinomial")
+
+# train the model
+model = nb.fit(train)
+
+# select example rows to display.
+predictions = model.transform(test)
+predictions.show()
+
+# compute accuracy on the test set
+evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction",
+                                              metricName="accuracy")
+accuracy = evaluator.evaluate(predictions)
+print("Test set accuracy = " + str(accuracy))
+spark.stop()
+```
+output:
+```+-----+--------------------+--------------------+-----------+----------+
+|label|            features|       rawPrediction|probability|prediction|
++-----+--------------------+--------------------+-----------+----------+
+|  0.0|(692,[95,96,97,12...|[-174115.98587057...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[98,99,100,1...|[-178402.52307196...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[100,101,102...|[-100905.88974016...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[123,124,125...|[-244784.29791241...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[123,124,125...|[-196900.88506109...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[124,125,126...|[-238164.45338794...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[124,125,126...|[-184206.87833381...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[127,128,129...|[-214174.52863813...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[127,128,129...|[-182844.62193963...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[128,129,130...|[-246557.10990301...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[152,153,154...|[-208282.08496711...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[152,153,154...|[-243457.69885665...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[153,154,155...|[-260933.50931276...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[154,155,156...|[-220274.72552901...|  [1.0,0.0]|       0.0|
+|  0.0|(692,[181,182,183...|[-154830.07125175...|  [1.0,0.0]|       0.0|
+|  1.0|(692,[99,100,101,...|[-145978.24563975...|  [0.0,1.0]|       1.0|
+|  1.0|(692,[100,101,102...|[-147916.32657832...|  [0.0,1.0]|       1.0|
+|  1.0|(692,[123,124,125...|[-139663.27471685...|  [0.0,1.0]|       1.0|
+|  1.0|(692,[124,125,126...|[-129013.44238751...|  [0.0,1.0]|       1.0|
+|  1.0|(692,[125,126,127...|[-81829.799906049...|  [0.0,1.0]|       1.0|
++-----+--------------------+--------------------+-----------+----------+
+only showing top 20 rows
+
+Test set accuracy = 1.0
+
+```
+Find full example code at "examples/src/main/python/ml/naive_bayes_example.py" in the Spark repo.
 
 ## **Regression**
 
