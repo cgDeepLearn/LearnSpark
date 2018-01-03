@@ -604,11 +604,188 @@ Test set accuracy = 1.0
 Find full example code at "examples/src/main/python/ml/naive_bayes_example.py" in the Spark repo.
 
 ## **Regression**
+### Linear regression
+用于处理线性回归模型和模型摘要的界面与逻辑回归情况类似。
+- When fitting LinearRegressionModel without intercept on dataset with constant nonzero column by “l-bfgs” solver, Spark MLlib outputs zero coefficients for constant nonzero columns. This behavior is the same as R glmnet but different from LIBSVM.
+
+**Examples**
+
+下面的例子演示了训练弹性网络正则化线性回归模型和提取模型总结统计。
+```python
+from pyspark.ml.regression import LinearRegression
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("LinearRegressionExample").getOrCreate()
+# Load training data
+training = spark.read.format("libsvm")\
+    .load("data/mllib/sample_linear_regression_data.txt")
+
+lr = LinearRegression(maxIter=10, regParam=0.3, elasticNetParam=0.8)
+
+# Fit the model
+lrModel = lr.fit(training)
+
+# Print the coefficients and intercept for linear regression
+print("Coefficients: %s" % str(lrModel.coefficients))
+print("Intercept: %s" % str(lrModel.intercept))
+
+# Summarize the model over the training set and print out some metrics
+trainingSummary = lrModel.summary
+print("numIterations: %d" % trainingSummary.totalIterations)
+print("objectiveHistory: %s" % str(trainingSummary.objectiveHistory))
+trainingSummary.residuals.show()
+print("RMSE: %f" % trainingSummary.rootMeanSquaredError)
+print("r2: %f" % trainingSummary.r2)
+spark.stop()
+```
+output:
+```
+Coefficients: [0.0,0.322925166774,-0.343854803456,1.91560170235,0.0528805868039,0.76596272046,0.0,-0.151053926692,-0.215879303609,0.220253691888]
+Intercept: 0.1598936844239736
+numIterations: 7
+objectiveHistory: [0.49999999999999994, 0.4967620357443381, 0.4936361664340463, 0.4936351537897608, 0.4936351214177871, 0.49363512062528014, 0.4936351206216114]
++--------------------+
+|           residuals|
++--------------------+
+|  -9.889232683103197|
+|  0.5533794340053554|
+|  -5.204019455758823|
+| -20.566686715507508|
+|    -9.4497405180564|
+|  -6.909112502719486|
+|  -10.00431602969873|
+|   2.062397807050484|
+|  3.1117508432954772|
+| -15.893608229419382|
+|  -5.036284254673026|
+|   6.483215876994333|
+|  12.429497299109002|
+|  -20.32003219007654|
+| -2.0049838218725005|
+| -17.867901734183793|
+|   7.646455887420495|
+| -2.2653482182417406|
+|-0.10308920436195645|
+|  -1.380034070385301|
++--------------------+
+only showing top 20 rows
+
+RMSE: 10.189077
+r2: 0.022861
+```
+Find full example code at "examples/src/main/python/ml/linear_regression_with_elastic_net.py" in the Spark repo.
+### Generalized linear regression
+与线性回归假设输出服从高斯分布不同，广义线性模型（GLMs）指定线性模型的因变量服从指数分布。
+Spark的GeneralizedLinearRegression接口允许指定GLMs包括线性回归、泊松回归、逻辑回归等来处理多种预测问题。目前spark.ml仅支持指数型分布家族中的一部分类型，如下：
+
+Family |	Response Type |	Supported Links
+--- | --- | ---
+Gaussian(高斯) |	Continuous(连续) |	Identity*, Log, Inverse
+Binomial(二项)|	Binary(二进制)	| Logit*, Probit, CLogLog
+Poisson(泊松) |	Count(计数) |	Log*, Identity, Sqrt
+Gamma(伽马) | Continuous(连续) |	Inverse*, Idenity, Log
+Tweedie |	Zero-inflated continuous(零膨胀连续) |	Power link function
+
+注意：目前Spark在 GeneralizedLinearRegression仅支持最多4096个特征，如果特征超过4096个将会引发异常。对于线性回归和逻辑回归，如果模型特征数量会不断增长，则可通过 LinearRegression 和LogisticRegression来训练。
+
+GLMs要求的指数型分布可以为正则或者自然形式。自然指数型分布为如下形式：
+![广义线性模型](https://github.com/cgDeepLearn/LearnSpark/blob/master/pics/GLM.png?raw=true)
+
+Spark的GeneralizedLinearRegression接口提供汇总统计来诊断GLM模型的拟合程度，包括残差、p值、残差、Akaike信息准则及其它。
+
+**Examples**
+以下示例演示使用高斯响应和标识链接函数训练GLM并提取模型摘要统计信息。
+```python
+from pyspark.ml.regression import GeneralizedLinearRegression
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("GeneralizedLinearRegression").getOrCreate()
+# Load training data
+dataset = spark.read.format("libsvm")\
+    .load("data/mllib/sample_linear_regression_data.txt")
+
+glr = GeneralizedLinearRegression(family="gaussian", link="identity", maxIter=10, regParam=0.3)
+
+# Fit the model
+model = glr.fit(dataset)
+
+# Print the coefficients and intercept for generalized linear regression model
+print("Coefficients: " + str(model.coefficients))
+print("Intercept: " + str(model.intercept))
+
+# Summarize the model over the training set and print out some metrics
+summary = model.summary
+print("Coefficient Standard Errors: " + str(summary.coefficientStandardErrors))
+print("T Values: " + str(summary.tValues))
+print("P Values: " + str(summary.pValues))
+print("Dispersion: " + str(summary.dispersion))
+print("Null Deviance: " + str(summary.nullDeviance))
+print("Residual Degree Of Freedom Null: " + str(summary.residualDegreeOfFreedomNull))
+print("Deviance: " + str(summary.deviance))
+print("Residual Degree Of Freedom: " + str(summary.residualDegreeOfFreedom))
+print("AIC: " + str(summary.aic))
+print("Deviance Residuals: ")
+summary.residuals().show()
+spark.stop()
+```
+output:
+```
+Coefficients: [0.0105418280813,0.800325310056,-0.784516554142,2.36798871714,0.501000208986,1.12223511598,-0.292682439862,-0.498371743232,-0.603579718068,0.672555006719]
+Intercept: 0.14592176145232041
+Coefficient Standard Errors: [0.7950428434287478, 0.8049713176546897, 0.7975916824772489, 0.8312649247659919, 0.7945436200517938, 0.8118992572197593, 0.7919506385542777, 0.7973378214726764, 0.8300714999626418, 0.7771333489686802, 0.463930109648428]
+T Values: [0.013259446542269243, 0.9942283563442594, -0.9836067393599172, 2.848657084633759, 0.6305509179635714, 1.382234441029355, -0.3695715687490668, -0.6250446546128238, -0.7271418403049983, 0.8654306337661122, 0.31453393176593286]
+P Values: [0.989426199114056, 0.32060241580811044, 0.3257943227369877, 0.004575078538306521, 0.5286281628105467, 0.16752945248679119, 0.7118614002322872, 0.5322327097421431, 0.467486325282384, 0.3872259825794293, 0.753249430501097]
+Dispersion: 105.60988356821714
+Null Deviance: 53229.3654338832
+Residual Degree Of Freedom Null: 500
+Deviance: 51748.8429484264
+Residual Degree Of Freedom: 490
+AIC: 3769.1895871765314
+Deviance Residuals: 
++-------------------+
+|  devianceResiduals|
++-------------------+
+|-10.974359174246889|
+| 0.8872320138420559|
+| -4.596541837478908|
+|-20.411667435019638|
+|-10.270419345342642|
+|-6.0156058956799905|
+|-10.663939415849267|
+| 2.1153960525024713|
+| 3.9807132379137675|
+|-17.225218272069533|
+| -4.611647633532147|
+| 6.4176669407698546|
+| 11.407137945300537|
+| -20.70176540467664|
+| -2.683748540510967|
+|-16.755494794232536|
+|  8.154668342638725|
+|-1.4355057987358848|
+|-0.6435058688185704|
+|  -1.13802589316832|
++-------------------+
+only showing top 20 rows
+```
+Find full example code at "examples/src/main/python/ml/generalized_linear_regression_example.py" in the Spark repo.
+### Decision tree regression
+
+### Random forest regression
+
+### Gradient-boosted tree regression
+
+### Survival regression
+
+### Isotonic regression
 
 ## **Linear Methods**
 
 ## **Decision Trees**
+### Inputs and Outputs
 
 ## **Tree Ensembles**
+### Randm Forests
 
-##
+
+### Fradient-Boosted Tress(GBTs)
