@@ -126,7 +126,7 @@ only showing top 20 rows
 ```
 Find full example code at "examples/src/main/python/ml/als_example.py" in the Spark repo.
 
-如果评级矩阵是从另一个信息源（即它是从其他信号推断）得出，可以设置implicitPrefs以true获得更好的效果：
+如果评分矩阵是从另一个信息源（即它是从其他信号推断）得出，可以设置implicitPrefs以true获得更好的效果：
 ```python
 als = ALS(maxIter=5, regParam=0.01, implicitPrefs=True,
           userCol="userId", itemCol="movieId", ratingCol="rating")
