@@ -1,7 +1,8 @@
-#Clustering
+# Clustering
+
 本页介绍MLlib中的聚类算法。在[基于RDD-API聚类指南](https://spark.apache.org/docs/latest/mllib-clustering.html)里还提供了有关这些算法的相关信息。
 
-##K-means
+## K-means
 K-means是一个常用的聚类算法来将数据点按预定的簇数进行聚集。K-means算法的基本思想是：以空间中k个点为中心进行聚类，对最靠近他们的对象归类。通过迭代的方法，逐次更新各聚类中心的值，直至得到最好的聚类结果。
 
 假设要把样本集分为c个类别，算法描述如下：
@@ -59,7 +60,8 @@ Cluster Centers:
 [ 9.1  9.1  9.1]
 ```
 Find full example code at "examples/src/main/python/ml/kmeans_example.py" in the Spark repo.
-##Latent Dirichlet allocation(LDA)
+## Latent Dirichlet allocation(LDA)
+
 LDA（Latent Dirichlet Allocation）是一种文档主题生成模型，也称为一个三层贝叶斯概率模型，包含词、主题和文档三层结构。所谓生成模型，就是说，我们认为一篇文章的每个词都是通过“以一定概率选择了某个主题，并从这个主题中以一定概率选择某个词语”这样一个过程得到。文档到主题服从多项式分布，主题到词服从多项式分布。
 
 LDA是一种非监督机器学习技术，可以用来识别大规模文档集（document collection）或语料库（corpus）中潜藏的主题信息。它采用了词袋（bag of words）的方法，这种方法将每一篇文档视为一个词频向量，从而将文本信息转化为了易于建模的数字信息。但是词袋方法没有考虑词与词之间的顺序，这简化了问题的复杂性，同时也为模型的改进提供了契机。每一篇文档代表了一些主题所构成的一个概率分布，而每一个主题又代表了很多单词所构成的一个概率分布。
@@ -132,7 +134,7 @@ The topics described by their top-weighted terms:
 +-----+---------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 ```
 Find full example code at "examples/src/main/python/ml/lda_example.py" in the Spark repo.
-##Bisecting k-means
+## Bisecting k-means
 二分K均值算法是一种层次聚类算法，使用自顶向下的逼近：所有的观察值开始是一个簇，递归地向下一个层级分裂。分裂依据为选择能最大程度降低聚类代价函数（也就是误差平方和）的簇划分为两个簇。以此进行下去，直到簇的数目等于用户给定的数目k为止。二分K均值常常比传统K均值算法有更快的计算速度，但产生的簇群与传统K均值算法往往也是不同的。
 
 BisectingKMeans是一个Estimator，在基础模型上训练得到BisectingKMeansModel。
@@ -169,7 +171,7 @@ Cluster Centers:
 [ 9.1  9.1  9.1]
 ```
 Find full example code at "examples/src/main/python/ml/bisecting_k_means_example.py" in the Spark repo.
-##Gaussian Mixture Model(GMM)
+## Gaussian Mixture Model(GMM)
 混合高斯模型描述数据点以一定的概率服从k种高斯子分布的一种混合分布。Spark.ml使用EM算法给出一组样本的极大似然模型。
 
 GaussianMixture被实现为一个Estimator,并生成一个GaussianMixtureModel基本模型。
