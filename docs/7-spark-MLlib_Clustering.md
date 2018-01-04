@@ -22,6 +22,7 @@ MLlib工具包含并行的K-means++算法，称为kmeans||。Kmeans是一个Esti
 Param name(参数名称)	| Type(s)(类型)	| Default(默认) |	Description(描述)
 ---|---|---|---
 featuresCol	| Vector |	"features" |	Feature vector(特征向量)
+
 - **Output Columns(输出列)**
 
 Param name(参数名称) |	Type(s)(类型) |	Default(默认)	| Description(描述)
@@ -181,9 +182,11 @@ GaussianMixture被实现为一个Estimator,并生成一个GaussianMixtureModel�
 Param name |	Type(s)	| Default |	Description
 ---|---|---|---
 featuresCol |	Vector |	"features" |	Feature vector
+
 - **Output Columns**
 
 Param name |	Type(s)	 | Default |	Description
+---|---|---|---
 predictionCol | Int	| "prediction" |	Predicted cluster center
 probabilityCol |	Vector |	"probability" |	Probability of each cluster
 
