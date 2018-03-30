@@ -16,5 +16,5 @@
 - [✔] [Clustering](docs/7-spark-MLlib_Clustering.md)
 - [✔] [Collaborative_filtering](docs/8-spark-MLlib_Collaborative_filtering.md)
 - [✔] [Frequent_pattern_mining](docs/9-spark-MLlib_Frequent_pattern_mining.md)
-- [✔] [ML_tuing](docs/10-spark-MLlib_ml_tuinng.md)
+- [✔] [ML_tuning](docs/10-spark-MLlib_ml_tuning.md)
 - [✔] [Advanced_topics](docs/11-spark-MLlib_Advanced_topics.md)
