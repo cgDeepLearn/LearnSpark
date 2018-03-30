@@ -425,7 +425,8 @@ Find full example code at "examples/src/main/python/ml/gradient_boosted_tree_cla
  中间层节点使用sigmoid（logistic）函数：f(zi) = 1/(1 + e^-zi)\
   输出层中的节点使用softmax函数：f(zi) = e^zi/(∑e^zi) \
  输出层中N代表类别数目\
- 多层感知机通过方向向传播来学习模型，我们使用逻辑损失函数优化,L-BFGS作为优化程序
+ 多层感知机通过方向向传播来学习模型，我们使用逻辑损失函数优化,L-BFGS作为优化程序.
+ 
  ```python
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
